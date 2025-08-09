@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vintage Wanted Poster — Selfie</title>
+  <style>
+    :root{--accent:#6b2f1b;--paper:#f2e1c9}
+    body{font-family:Georgia, 'Times New Roman', serif; background:#f3efe7; margin:0; padding:20px; display:flex;flex-direction:column;align-items:center;gap:18px}
+    h1{margin:0;font-size:1.1rem;text-align:center}
+    .app{max-width:980px;width:100%;display:grid;grid-template-columns:1fr 420px;gap:18px}
+    .left{background:linear-gradient(180deg,#fff,#f9f5ee);padding:14px;border-radius:8px;box-shadow:0 6px 20px rgba(20,20,20,0.08)}
+    video, canvas#captureCanvas{width:100%;height:auto;border-radius:8px;background:#222}
+    .controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    button{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:6px;font-weight:700;cursor:pointer}
+    button.secondary{background:#8c6a4a}
+    .right{display:flex;flex-direction:column;gap:12px;align-items:center}
+    #posterPreview{width:380px;border:10px solid #84563c;background:var(--paper);box-shadow:0 8px 30px rgba(0,0,0,0.25)}
+    .small{font-size:0.9rem;color:#444}
+    label{display:block;margin-bottom:6px;font-weight:700}
+    input[type='text']{width:100%;padding:8px;border:2px solid #d6c3ab;border-radius:6px}
+    .footer{margin-top:12px;font-size:0.85rem;color:#666;text-align:center}
+
+    /* printable poster style when user prints: hide UI and only show poster area */
+    @media print{
+      body *{visibility:hidden}
+      #printArea, #printArea *{visibility:visible}
+      #printArea{position:fixed;left:0;top:0;width:100%;height:100%}
+    }
+  </style>
+</head>
+<body>
+  <h1>Make a quirky vintage "Wanted" poster from a selfie</h1>
+  <div class="app">
+    <div class="left">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="captureCanvas" style="display:none"></canvas>
+      <div class="controls">
+        <button id="startBtn">Use Camera</button>
+        <button id="captureBtn" class="secondary">Capture Selfie</button>
+        <button id="retakeBtn" class="secondary" style="display:none">Retake</button>
+        <button id="generateBtn">Generate Poster</button>
+        <button id="downloadBtn" class="secondary">Download PNG</button>
+      </div>
+      <div style="margin-top:10px">
+        <label for="personName">Name (optional)</label>
+        <input id="personName" placeholder="e.g. The Peanut Bandit" />
+      </div>
+      <div style="margin-top:10px">
+        <label for="seedCharge">Choose a charge (or leave blank for random)</label>
+        <input id="seedCharge" placeholder='e.g. "Wanted for stealing PB&J from the trash can of Oscar the Grouch"' />
+      </div>
+    </div>
+
+    <div class="right">
+      <div id="posterContainer">
+        <canvas id="posterPreview" width="1200" height="1600"></canvas>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button id="printBtn">Print Poster</button>
+      </div>
+      <div class="small">Tip: For best results open this page in your phone browser, allow camera access, capture and print.</div>
+    </div>
+  </div>
+
+  <div class="footer">Made with ❤️ — family-friendly charges only</div>
+
+  <script>
+    const video = document.getElementById('video');
+    const startBtn = document.getElementById('startBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const retakeBtn = document.getElementById('retakeBtn');
+    const generateBtn = document.getElementById('generateBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const captureCanvas = document.getElementById('captureCanvas');
+    const posterCanvas = document.getElementById('posterPreview');
+    const printBtn = document.getElementById('printBtn');
+    const nameInput = document.getElementById('personName');
+    const chargeInput = document.getElementById('seedCharge');
+
+    const pc = posterCanvas.getContext('2d');
+    const cc = captureCanvas.getContext('2d');
+
+    // family friendly charge examples (including the user's example)
+    const charges = [
+      "Wanted for stealing PB&J from the trash can of Oscar the Grouch",
+      "Wanted for pinching the last cookie at Grandma's house",
+      "Wanted for borrowing the TV remote and never returning it",
+      "Wanted for hiding the neighbor's garden gnome",
+      "Wanted for sneaking extra marshmallows from the sack",
+      "Wanted for swiping a slice of pizza from the picnic table",
+      "Wanted for daringly eating someone else's ice cream",
+      "Wanted for painting the mailbox polka-dot blue"
+    ];
+
+    let stream = null;
+    let lastImage = null; // image data URL
+
+    function formatCurrency(n){
+      return '$' + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function randomBounty(){
+      // random integer > 500, up to 20,000
+      const min = 501;
+      const max = 20000;
+      const r = Math.floor(Math.random()*(max-min+1))+min;
+      // round to nearest 5
+      return Math.round(r/5)*5;
+    }
+
+    async function startCamera(){
+      if(stream) return;
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}, audio:false});
+        video.srcObject = stream;
+      }catch(e){
+        alert('Camera access failed: '+e.message);
+      }
+    }
+
+    startBtn.addEventListener('click', startCamera);
+
+    captureBtn.addEventListener('click', ()=>{
+      // capture current video frame to canvas
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      if(!w || !h){ alert('Camera not ready yet — try again.'); return; }
+      captureCanvas.width = w;
+      captureCanvas.height = h;
+      cc.drawImage(video,0,0,w,h);
+      lastImage = captureCanvas.toDataURL('image/jpeg', 0.92);
+      retakeBtn.style.display = 'inline-block';
+      // show a small preview on poster area
+      renderPosterPreview();
+    });
+
+    retakeBtn.addEventListener('click', ()=>{ lastImage=null; retakeBtn.style.display='none'; renderPosterPreview(); });
+
+    generateBtn.addEventListener('click', ()=>{
+      if(!lastImage){ alert('Please capture a selfie first.'); return; }
+      renderPosterPreview(true);
+    });
+
+    downloadBtn.addEventListener('click', ()=>{
+      // save poster as PNG
+      const link = document.createElement('a');
+      link.download = 'wanted-poster.png';
+      link.href = posterCanvas.toDataURL('image/png');
+      link.click();
+    });
+
+    printBtn.addEventListener('click', ()=>{
+      // open print dialog — the @media print rule will hide UI
+      window.print();
+    });
+
+    function drawPaperBackground(ctx, w, h){
+      // base
+      ctx.fillStyle = '#f2e1c9';
+      ctx.fillRect(0,0,w,h);
+      // subtle stains
+      for(let i=0;i<10;i++){
+        ctx.globalAlpha = 0.06;
+        ctx.beginPath();
+        const rw = Math.random()*w;
+        const rh = Math.random()*h;
+        ctx.ellipse(rw,rh, 80+Math.random()*200, 40+Math.random()*140, Math.random()*Math.PI,0,Math.PI*2);
+        ctx.fillStyle = '#d6bfa6';
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // edge darken
+      const g = ctx.createLinearGradient(0,0,0,h);
+      g.addColorStop(0, 'rgba(0,0,0,0.04)');
+      g.addColorStop(0.06,'rgba(0,0,0,0.02)');
+      g.addColorStop(0.94,'rgba(0,0,0,0.02)');
+      g.addColorStop(1,'rgba(0,0,0,0.04)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,w,h);
+    }
+
+    function drawTornBorder(ctx,w,h){
+      ctx.save();
+      ctx.strokeStyle = '#7b4a34';
+      ctx.lineWidth = 10;
+      ctx.setLineDash([8,6]);
+      ctx.strokeRect(30,30,w-60,h-60);
+      ctx.restore();
+    }
+
+    function renderPosterPreview(highRes=false){
+      // poster canvas resolution
+      const W = highRes?1600:1200;
+      const H = highRes?2133:1600;
+      posterCanvas.width = W; posterCanvas.height = H;
+      // draw background
+      drawPaperBackground(pc, W, H);
+      drawTornBorder(pc, W, H);
+
+      // Title: WANTED
+      pc.fillStyle = '#3a1f14';
+      pc.textAlign = 'center';
+      pc.font = Math.floor(W*0.09)+'px Georgia';
+      pc.fillText('WANTED', W/2, Math.floor(H*0.12));
+      // subtitle
+      pc.font = Math.floor(W*0.032)+'px Georgia';
+      pc.fillText('DEAD OR ALIVE', W/2, Math.floor(H*0.17));
+
+      // portrait area (oval)
+      const ovalW = Math.floor(W*0.6);
+      const ovalH = Math.floor(H*0.45);
+      const ovalX = (W-ovalW)/2;
+      const ovalY = Math.floor(H*0.20);
+
+      // draw photo if exists
+      if(lastImage){
+        const img = new Image();
+        img.onload = ()=>{
+          // draw sepia-toned photo clipped to oval
+          pc.save();
+          // create oval clip
+          pc.beginPath();
+          pc.ellipse(W/2, ovalY+ovalH/2, ovalW/2, ovalH/2, 0, 0, Math.PI*2);
+          pc.clip();
+
+          // compute draw dims to cover the oval nicely
+          const aspect = img.width / img.height;
+          let dw = ovalW*1.1;
+          let dh = dw / aspect;
+          if(dh < ovalH*1.1){ dh = ovalH*1.1; dw = dh * aspect; }
+          const dx = W/2 - dw/2;
+          const dy = ovalY + ovalH/2 - dh/2;
+
+          pc.drawImage(img, dx, dy, dw, dh);
+
+          // apply a subtle sepia overlay
+          pc.fillStyle = 'rgba(98,56,26,0.12)';
+          pc.fillRect(dx,dy,dw,dh);
+
+          pc.restore();
+
+          // draw oval frame
+          pc.beginPath();
+          pc.ellipse(W/2, ovalY+ovalH/2, ovalW/2+8, ovalH/2+8, 0, 0, Math.PI*2);
+          pc.strokeStyle = '#2f1b13'; pc.lineWidth = 6; pc.stroke();
+
+          // draw name and bounty after photo loaded
+          drawTextBlocks();
+        }
+        img.src = lastImage;
+      } else {
+        // placeholder silhouette
+        pc.save();
+        pc.beginPath();
+        pc.ellipse(W/2, ovalY+ovalH/2, ovalW/2, ovalH/2, 0, 0, Math.PI*2);
+        pc.fillStyle = '#dac7ad'; pc.fill();
+        pc.fillStyle = '#855c41'; pc.font = Math.floor(W*0.04)+'px Georgia';
+        pc.fillText('No selfie yet', W/2, ovalY+ovalH/2);
+        pc.restore();
+        drawTextBlocks();
+      }
+
+      function drawTextBlocks(){
+        // Name
+        const name = (nameInput.value && nameInput.value.trim().length>0) ? nameInput.value.trim() : 'THE SUSPECT';
+        pc.fillStyle = '#3a1f14';
+        pc.textAlign = 'center';
+        pc.font = Math.floor(W*0.055)+'px Georgia';
+        pc.fillText(name.toUpperCase(), W/2, Math.floor(H*0.66));
+
+        // charge
+        const charge = (chargeInput.value && chargeInput.value.trim().length>5) ? chargeInput.value.trim() : charges[Math.floor(Math.random()*charges.length)];
+        pc.font = Math.floor(W*0.032)+'px Georgia';
+        wrapText(pc, charge, W/2, Math.floor(H*0.71), Math.floor(W*0.8), Math.floor(W*0.048));
+
+        // bounty — ensure > $500
+        let bounty = randomBounty();
+        pc.font = Math.floor(W*0.045)+'px Georgia';
+        pc.fillText('REWARD: ' + formatCurrency(bounty), W/2, Math.floor(H*0.86));
+
+        // footer notice
+        pc.font = Math.floor(W*0.028)+'px Georgia';
+        pc.fillText('This poster is for fun & family-friendly mischief only', W/2, Math.floor(H*0.94));
+      }
+    }
+
+    function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+      const words = text.split(' ');
+      let line = '';
+      for(let n=0;n<words.length;n++){
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        if(testWidth > maxWidth && n>0){
+          ctx.fillText(line, x, y);
+          line = words[n] + ' ';
+          y += lineHeight;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line, x, y);
+    }
+
+    // initial render
+    renderPosterPreview();
+
+    // automatically try to start camera for convenience on mobile
+    (async ()=>{
+      try{ await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false}); /* don't attach immediately */ }catch(e){}
+    })();
+
+  </script>
+</body>
+</html>
