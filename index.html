@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vintage Wanted Poster Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rye&family=Special+Elite&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Special Elite', cursive;
+            background-color: #f5e8c7; /* Parchment color */
+        }
+        .wanted-font {
+            font-family: 'Rye', serif;
+        }
+        #poster {
+            background-color: #e8d9b7;
+            border: 20px solid #5a3d2b;
+            border-image: url('data:image/svg+xml;charset=utf-8,%3Csvg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Cstyle%3Epath%7Bstroke:%235a3d2b;stroke-width:4;%7D%3C/style%3E%3Cpath d="M0 0h100v100H0z"/%3E%3Cpath d="M15 15h70v70H15z"/%3E%3Cpath d="M30 30h40v40H30z"/%3E%3C/svg%3E') 20;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        /* Print-specific styles */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #poster, #poster * {
+                visibility: visible;
+            }
+            #poster {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+                box-shadow: none;
+                margin: 0;
+                padding: 20px;
+                box-sizing: border-box;
+            }
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-[#f5e8c7] text-[#4a2c2a] min-h-screen flex items-center justify-center p-4">
+
+    <div id="app-container" class="w-full max-w-lg mx-auto text-center">
+        
+        <div id="camera-view" class="space-y-4">
+            <h1 class="wanted-font text-5xl md:text-6xl text-center mb-4">Get Your Mugshot</h1>
+            <div class="relative w-full aspect-square bg-gray-800 rounded-lg shadow-lg overflow-hidden border-4 border-[#a18069]">
+                <video id="video" class="w-full h-full object-cover" autoplay playsinline></video>
+                <div id="camera-feedback" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white text-xl">
+                    Starting camera...
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="snap" class="w-full bg-[#7a5c49] hover:bg-[#5a3d2b] text-white font-bold py-3 px-4 rounded-lg text-2xl wanted-font transition-colors duration-300 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                    Take Picture
+                </button>
+                <button id="switch-camera" class="w-full sm:w-auto bg-gray-600 hover:bg-gray-700 text-white font-bold p-3 rounded-lg text-lg wanted-font transition-colors duration-300 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                    Switch Cam
+                </button>
+            </div>
+        </div>
+
+        <div id="result-view" class="hidden">
+            <div id="poster" class="p-6 md:p-8 w-full">
+                <h1 class="wanted-font text-6xl md:text-8xl text-center">WANTED</h1>
+                <h2 class="wanted-font text-3xl md:text-4xl text-center -mt-2 md:-mt-4">DEAD OR ALIVE</h2>
+                
+                <div class="my-4 md:my-6 p-2 bg-[#d7c4a0] border-4 border-[#4a2c2a]">
+                    <canvas id="photo-canvas" class="w-full h-auto"></canvas>
+                </div>
+
+                <div class="text-center space-y-2">
+                    <p class="text-lg md:text-xl leading-tight">For crimes against good taste, including but not limited to:</p>
+                    <p id="charges" class="font-bold text-xl md:text-2xl leading-snug px-4"></p>
+                </div>
+
+                <div class="wanted-font text-center mt-6">
+                    <p class="text-2xl">REWARD</p>
+                    <p id="bounty" class="text-5xl md:text-6xl"></p>
+                </div>
+            </div>
+            <div class="mt-6 flex flex-col sm:flex-row gap-4 no-print">
+                <button id="retake" class="w-full bg-[#7a5c49] hover:bg-[#5a3d2b] text-white font-bold py-3 px-4 rounded-lg text-xl wanted-font transition-colors duration-300 shadow-md">
+                    Try Again
+                </button>
+                <a id="download" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-3 px-4 rounded-lg text-xl wanted-font transition-colors duration-300 shadow-md text-center" href="#" download="wanted-poster.png">
+                    Download
+                </a>
+                <button id="print" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg text-xl wanted-font transition-colors duration-300 shadow-md">
+                    Print
+                </button>
+            </div>
+        </div>
+
+        <!-- Hidden canvas for initial photo capture -->
+        <canvas id="capture-canvas" class="hidden"></canvas>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const snapButton = document.getElementById('snap');
+        const switchCameraButton = document.getElementById('switch-camera');
+        const retakeButton = document.getElementById('retake');
+        const downloadButton = document.getElementById('download');
+        const printButton = document.getElementById('print');
+        const cameraView = document.getElementById('camera-view');
+        const resultView = document.getElementById('result-view');
+        const captureCanvas = document.getElementById('capture-canvas');
+        const photoCanvas = document.getElementById('photo-canvas');
+        const bountyEl = document.getElementById('bounty');
+        const chargesEl = document.getElementById('charges');
+        const cameraFeedback = document.getElementById('camera-feedback');
+
+        let currentFacingMode = 'user'; // 'user' for selfie, 'environment' for back camera
+
+        const chargesList = [
+            "Stealing PB&J from the trash can of Oscar the Grouch.",
+            "Telling dad jokes at a comedy club.",
+            "Putting pineapple on pizza, despite numerous warnings.",
+            "Double-dipping chips at a party.",
+            "Leaving shopping carts in the middle of the parking lot.",
+            "Talking during a movie at the theater.",
+            "Wearing socks with sandals.",
+            "Rewinding a rented movie only halfway.",
+            "Claiming 'it's a feature, not a bug'."
+        ];
+
+        // Function to stop the current video stream
+        function stopVideoStream() {
+            if (video.srcObject) {
+                const stream = video.srcObject;
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+                video.srcObject = null;
+            }
+        }
+        
+        // Function to start the camera
+        async function startCamera() {
+            stopVideoStream(); // Ensure any previous stream is stopped
+            snapButton.disabled = true;
+            switchCameraButton.disabled = true;
+            cameraFeedback.classList.remove('hidden');
+            cameraFeedback.textContent = "Starting camera...";
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: currentFacingMode,
+                        width: { ideal: 1080 },
+                        height: { ideal: 1080 }
+                    } 
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    cameraFeedback.classList.add('hidden');
+                    snapButton.disabled = false;
+                    switchCameraButton.disabled = false;
+                };
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                cameraFeedback.textContent = "Could not access camera. Please grant permission.";
+            }
+        }
+
+        // Function to generate the poster
+        function generatePoster() {
+            // 1. Capture the image from video to the hidden canvas
+            const captureCtx = captureCanvas.getContext('2d');
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            // Flip the image horizontally if it's the selfie camera
+            if (currentFacingMode === 'user') {
+                captureCtx.translate(video.videoWidth, 0);
+                captureCtx.scale(-1, 1);
+            }
+            captureCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+
+            // 2. Prepare the visible photo canvas with filters
+            const photoCtx = photoCanvas.getContext('2d');
+            photoCanvas.width = video.videoWidth;
+            photoCanvas.height = video.videoHeight;
+            
+            // Apply grayscale and then sepia filter
+            photoCtx.filter = 'grayscale(1)'; //' sepia(0.7) contrast(1.1) brightness(0.9)';
+            photoCtx.drawImage(captureCanvas, 0, 0, photoCanvas.width, photoCanvas.height);
+            
+            // 3. Set random bounty and charges
+            const randomBounty = Math.floor(Math.random() * 9500) + 501;
+            bountyEl.textContent = `$${randomBounty}`;
+            chargesEl.textContent = `"${chargesList[Math.floor(Math.random() * chargesList.length)]}"`;
+
+            // 4. Switch views
+            cameraView.classList.add('hidden');
+            resultView.classList.remove('hidden');
+
+            // 5. Stop the camera stream
+            stopVideoStream();
+            
+            // 6. Generate final image for download after a short delay to ensure rendering
+            setTimeout(generateDownloadableImage, 100);
+        }
+
+        // Function to create the final downloadable image
+        function generateDownloadableImage() {
+            const posterElement = document.getElementById('poster');
+            const finalCanvas = document.createElement('canvas');
+            const finalCtx = finalCanvas.getContext('2d');
+
+            const scale = 2; 
+            finalCanvas.width = posterElement.offsetWidth * scale;
+            finalCanvas.height = posterElement.offsetHeight * scale;
+            finalCtx.scale(scale, scale);
+
+            const style = getComputedStyle(posterElement);
+            const color = style.color;
+            
+            finalCtx.fillStyle = style.backgroundColor;
+            finalCtx.fillRect(0, 0, posterElement.offsetWidth, posterElement.offsetHeight);
+
+            finalCtx.fillStyle = color;
+            finalCtx.textAlign = 'center';
+            finalCtx.textBaseline = 'top';
+            
+            const h1 = document.querySelector('#poster h1');
+            const h2 = document.querySelector('#poster h2');
+            const p1 = document.querySelector('.text-center p:first-of-type');
+            const chargesP = document.getElementById('charges');
+            const rewardP = document.querySelector('.wanted-font p:first-of-type');
+            const bountyP = document.getElementById('bounty');
+            const imageContainer = document.querySelector('.my-4');
+
+            finalCtx.font = getComputedStyle(h1).font;
+            finalCtx.fillText(h1.textContent, posterElement.offsetWidth / 2, parseFloat(style.paddingTop));
+            
+            finalCtx.font = getComputedStyle(h2).font;
+            finalCtx.fillText(h2.textContent, posterElement.offsetWidth / 2, h1.offsetTop + h1.offsetHeight - 10);
+
+            const photoX = imageContainer.offsetLeft;
+            const photoY = imageContainer.offsetTop;
+            const photoWidth = imageContainer.offsetWidth;
+            const photoHeight = imageContainer.offsetHeight;
+            finalCtx.drawImage(photoCanvas, photoX, photoY, photoWidth, photoHeight);
+
+            finalCtx.font = getComputedStyle(p1).font;
+            finalCtx.fillText(p1.textContent, posterElement.offsetWidth / 2, p1.offsetTop);
+            
+            finalCtx.font = getComputedStyle(chargesP).font;
+            wrapText(finalCtx, chargesP.textContent, posterElement.offsetWidth / 2, chargesP.offsetTop, posterElement.offsetWidth - 40, 30);
+            
+            finalCtx.font = getComputedStyle(rewardP).font;
+            finalCtx.fillText(rewardP.textContent, posterElement.offsetWidth / 2, rewardP.offsetTop);
+
+            finalCtx.font = getComputedStyle(bountyP).font;
+            finalCtx.fillText(bountyP.textContent, posterElement.offsetWidth / 2, bountyP.offsetTop);
+
+            downloadButton.href = finalCanvas.toDataURL('image/png');
+        }
+
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            let words = text.split(' ');
+            let line = '';
+            for(let n = 0; n < words.length; n++) {
+                let testLine = line + words[n] + ' ';
+                let metrics = context.measureText(testLine);
+                let testWidth = metrics.width;
+                if (testWidth > maxWidth && n > 0) {
+                    context.fillText(line, x, y);
+                    line = words[n] + ' ';
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            context.fillText(line, x, y);
+        }
+
+        // Event Listeners
+        snapButton.addEventListener('click', generatePoster);
+
+        switchCameraButton.addEventListener('click', () => {
+            currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+            startCamera();
+        });
+
+        retakeButton.addEventListener('click', () => {
+            resultView.classList.add('hidden');
+            cameraView.classList.remove('hidden');
+            startCamera();
+        });
+
+        printButton.addEventListener('click', () => {
+            window.print();
+        });
+
+        // Start the camera when the page loads
+        window.addEventListener('load', startCamera);
+
+    </script>
+</body>
+</html>
