@@ -205,11 +205,11 @@
 
             // 2. Prepare the visible photo canvas with filters
             const photoCtx = photoCanvas.getContext('2d');
-            photoCanvas.width = video.videoWidth;
-            photoCanvas.height = video.videoHeight;
+            photoCanvas.width = video.videoWidth/2;
+            photoCanvas.height = video.videoHeight/2;
             
             // Apply grayscale and then sepia filter
-            photoCtx.filter = 'grayscale(1)'; //' sepia(0.7) contrast(1.1) brightness(0.9)';
+            photoCtx.filter = 'grayscale(1)' sepia(0.7) contrast(1.1) brightness(0.9)';
             photoCtx.drawImage(captureCanvas, 0, 0, photoCanvas.width, photoCanvas.height);
             
             // 3. Set random bounty and charges
