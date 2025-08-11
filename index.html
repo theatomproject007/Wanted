@@ -174,8 +174,8 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         facingMode: currentFacingMode,
-                        width: { ideal: 640 },
-                        height: { ideal: 640 }
+                        width: { ideal: 1080 },
+                        height: { ideal: 1080 }
                     } 
                 });
                 video.srcObject = stream;
@@ -205,8 +205,8 @@
 
             // 2. Prepare the visible photo canvas with filters
             const photoCtx = photoCanvas.getContext('2d');
-            photoCanvas.width = video.videoWidth/2;
-            photoCanvas.height = video.videoHeight/2;
+            photoCanvas.width = video.videoWidth;
+            photoCanvas.height = video.videoHeight;
             
             // Apply grayscale and then sepia filter
             photoCtx.filter = 'grayscale(1)' sepia(0.7) contrast(1.1) brightness(0.9)';
